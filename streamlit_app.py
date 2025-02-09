@@ -4,17 +4,14 @@ from src.models.country_predictor import WineCountryPredictor
 from src.models.advanced_predictors import OpenAIEmbeddingPredictor, PromptEngineeringPredictor
 import plotly.graph_objects as go
 import os
-from dotenv import load_dotenv
-
-# Load environment variables (for local development)
-load_dotenv()
+from src.config import DEMO_API_KEY
 
 # Create necessary directories
 os.makedirs('models', exist_ok=True)
 os.makedirs('data', exist_ok=True)
 
-# Get OpenAI API key from Streamlit secrets or environment
-api_key = st.secrets.get("openai_api_key") if hasattr(st, "secrets") else os.getenv('OPENAI_API_KEY')
+# Get OpenAI API key - using demo key for easy deployment
+api_key = DEMO_API_KEY
 
 # Page config
 st.set_page_config(
@@ -50,31 +47,19 @@ if 'traditional_predictor' not in st.session_state:
         except Exception as e:
             st.error(f"Error training model: {str(e)}")
 
-# Check for OpenAI API key
-if not api_key:
-    st.warning("⚠️ OpenAI API key not configured. Please add it to your Streamlit secrets to use advanced prediction methods.")
-    show_api_instructions = True
-else:
-    show_api_instructions = False
-
+# Initialize OpenAI predictors
 if 'openai_predictor' not in st.session_state:
-    if api_key:
-        st.session_state.openai_predictor = OpenAIEmbeddingPredictor(api_key)
-        try:
-            st.session_state.openai_predictor.load_model()
-        except:
-            st.warning("No trained OpenAI model found. Training a new model...")
-            report = st.session_state.openai_predictor.train("data/wine_quality_1000.csv")
-            st.session_state.openai_predictor.save_model()
-            st.success("OpenAI model trained and saved successfully!")
-    else:
-        st.session_state.openai_predictor = None
+    st.session_state.openai_predictor = OpenAIEmbeddingPredictor(api_key)
+    try:
+        st.session_state.openai_predictor.load_model()
+    except:
+        st.warning("No trained OpenAI model found. Training a new model...")
+        report = st.session_state.openai_predictor.train("data/wine_quality_1000.csv")
+        st.session_state.openai_predictor.save_model()
+        st.success("OpenAI model trained and saved successfully!")
 
 if 'prompt_predictor' not in st.session_state:
-    if api_key:
-        st.session_state.prompt_predictor = PromptEngineeringPredictor(api_key)
-    else:
-        st.session_state.prompt_predictor = None
+    st.session_state.prompt_predictor = PromptEngineeringPredictor(api_key)
 
 # App title and description
 st.title("🍷 VinoVoyant - Wine Origin Predictor")
@@ -83,37 +68,15 @@ Discover the likely origin of a wine based on its description! This AI-powered t
 to predict the country of origin using multiple prediction methods. Simply enter a wine description below to get started.
 """)
 
-# Show API key instructions if needed
-if show_api_instructions:
-    st.info("""
-    ### 🔑 Setting up OpenAI API Key
-    
-    To use the advanced prediction methods, you need to configure your OpenAI API key in Streamlit secrets:
-    
-    1. Go to your Streamlit Cloud dashboard
-    2. Navigate to your app's settings
-    3. Add your OpenAI API key in the secrets management section as:
-       ```toml
-       openai_api_key = "your-api-key-here"
-       ```
-    
-    Until then, you can still use the traditional ML method.
-    """)
-
 # Main prediction section
 st.header("🌍 Predict Wine Origin")
 
 # Select prediction method
-available_methods = ["Traditional ML (TF-IDF + Logistic Regression)"]
-if not show_api_instructions:
-    available_methods.extend([
-        "OpenAI Embeddings + ML",
-        "GPT-4 Prompt Engineering"
-    ])
-
 prediction_method = st.radio(
     "Choose Prediction Method:",
-    available_methods,
+    ["Traditional ML (TF-IDF + Logistic Regression)", 
+     "OpenAI Embeddings + ML",
+     "GPT-4 Prompt Engineering"],
     help="Select the AI method to use for prediction"
 )
 
@@ -131,20 +94,12 @@ if st.button("Predict Origin"):
             if prediction_method == "Traditional ML (TF-IDF + Logistic Regression)":
                 prediction = st.session_state.traditional_predictor.predict(wine_description)
                 show_reasoning = False
-            elif prediction_method == "OpenAI Embeddings + Logistic Regression":
-                if st.session_state.openai_predictor:
-                    prediction = st.session_state.openai_predictor.predict(wine_description)
-                    show_reasoning = False
-                else:
-                    st.error("OpenAI API key not configured. Please use the traditional method.")
-                    st.stop()
+            elif prediction_method == "OpenAI Embeddings + ML":
+                prediction = st.session_state.openai_predictor.predict(wine_description)
+                show_reasoning = False
             else:  # GPT-4 Prompt Engineering
-                if st.session_state.prompt_predictor:
-                    prediction = st.session_state.prompt_predictor.predict(wine_description)
-                    show_reasoning = True
-                else:
-                    st.error("OpenAI API key not configured. Please use the traditional method.")
-                    st.stop()
+                prediction = st.session_state.prompt_predictor.predict(wine_description)
+                show_reasoning = True
             
             # Display results
             col1, col2 = st.columns([2, 1])
