@@ -7,18 +7,18 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 import re
 
+# Download required NLTK data
+try:
+    nltk.download('punkt')
+    nltk.download('stopwords')
+except Exception as e:
+    print(f"Warning: NLTK data download failed: {str(e)}")
+
 class WineDataPreprocessor:
     def __init__(self):
         self.label_encoders = {}
         self.scaler = StandardScaler()
         self.tfidf = TfidfVectorizer(max_features=100)
-        
-        # Download required NLTK data
-        try:
-            nltk.download('punkt', quiet=True)
-            nltk.download('stopwords', quiet=True)
-        except:
-            print("Warning: NLTK data download failed. Some text processing features might be limited.")
     
     def load_data(self, file_path):
         """Load the wine dataset."""

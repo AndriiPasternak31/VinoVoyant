@@ -9,6 +9,10 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+# Create necessary directories
+os.makedirs('models', exist_ok=True)
+os.makedirs('data', exist_ok=True)
+
 # Page config
 st.set_page_config(
     page_title="VinoVoyant - Wine Origin Predictor",
@@ -19,13 +23,29 @@ st.set_page_config(
 # Initialize session state
 if 'traditional_predictor' not in st.session_state:
     st.session_state.traditional_predictor = WineCountryPredictor()
-    try:
-        st.session_state.traditional_predictor.load_model()
-    except:
-        st.warning("No trained traditional model found. Training a new model...")
-        report = st.session_state.traditional_predictor.train("data/wine_quality_1000.csv")
-        st.session_state.traditional_predictor.save_model()
-        st.success("Traditional model trained and saved successfully!")
+    model_path = 'models/wine_country_predictor.joblib'
+    
+    if os.path.exists(model_path):
+        try:
+            st.session_state.traditional_predictor.load_model(model_path)
+            st.success("Traditional model loaded successfully!")
+        except Exception as e:
+            st.error(f"Error loading model: {str(e)}")
+            st.warning("Training new model...")
+            try:
+                report = st.session_state.traditional_predictor.train("data/wine_quality_1000.csv")
+                st.session_state.traditional_predictor.save_model(model_path)
+                st.success("Traditional model trained and saved successfully!")
+            except Exception as e:
+                st.error(f"Error training model: {str(e)}")
+    else:
+        st.warning("No trained model found. Training new model...")
+        try:
+            report = st.session_state.traditional_predictor.train("data/wine_quality_1000.csv")
+            st.session_state.traditional_predictor.save_model(model_path)
+            st.success("Traditional model trained and saved successfully!")
+        except Exception as e:
+            st.error(f"Error training model: {str(e)}")
 
 # Check for OpenAI API key
 api_key = os.getenv('OPENAI_API_KEY')
