@@ -7,10 +7,17 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 import re
 
-# Download required NLTK data
+# Download all required NLTK data
 try:
+    # Download essential data
     nltk.download('punkt')
     nltk.download('stopwords')
+    nltk.download('averaged_perceptron_tagger')
+    nltk.download('maxent_ne_chunker')
+    nltk.download('words')
+    
+    # Verify punkt is available
+    nltk.data.find('tokenizers/punkt')
 except Exception as e:
     print(f"Warning: NLTK data download failed: {str(e)}")
 
@@ -19,6 +26,16 @@ class WineDataPreprocessor:
         self.label_encoders = {}
         self.scaler = StandardScaler()
         self.tfidf = TfidfVectorizer(max_features=100)
+        
+        # Ensure NLTK resources are available
+        try:
+            nltk.data.find('tokenizers/punkt')
+        except LookupError:
+            nltk.download('punkt')
+        try:
+            nltk.data.find('corpora/stopwords')
+        except LookupError:
+            nltk.download('stopwords')
     
     def load_data(self, file_path):
         """Load the wine dataset."""
@@ -41,20 +58,28 @@ class WineDataPreprocessor:
     
     def preprocess_text(self, text):
         """Clean and preprocess text data."""
+        if not isinstance(text, str):
+            return ""
+            
         # Convert to lowercase
         text = text.lower()
         
         # Remove special characters and digits
         text = re.sub(r'[^a-zA-Z\s]', '', text)
         
-        # Tokenization
-        tokens = word_tokenize(text)
-        
-        # Remove stopwords
-        stop_words = set(stopwords.words('english'))
-        tokens = [token for token in tokens if token not in stop_words]
-        
-        return ' '.join(tokens)
+        try:
+            # Tokenization with error handling
+            tokens = word_tokenize(text)
+            
+            # Remove stopwords
+            stop_words = set(stopwords.words('english'))
+            tokens = [token for token in tokens if token not in stop_words]
+            
+            return ' '.join(tokens)
+        except Exception as e:
+            print(f"Error in text preprocessing: {str(e)}")
+            # Return cleaned text even if tokenization fails
+            return text
     
     def engineer_features(self, df):
         """Create new features from existing data."""

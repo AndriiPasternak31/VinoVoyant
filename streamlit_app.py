@@ -6,12 +6,15 @@ import plotly.graph_objects as go
 import os
 from dotenv import load_dotenv
 
-# Load environment variables
+# Load environment variables (for local development)
 load_dotenv()
 
 # Create necessary directories
 os.makedirs('models', exist_ok=True)
 os.makedirs('data', exist_ok=True)
+
+# Get OpenAI API key from Streamlit secrets or environment
+api_key = st.secrets.get("openai_api_key") if hasattr(st, "secrets") else os.getenv('OPENAI_API_KEY')
 
 # Page config
 st.set_page_config(
@@ -48,15 +51,14 @@ if 'traditional_predictor' not in st.session_state:
             st.error(f"Error training model: {str(e)}")
 
 # Check for OpenAI API key
-api_key = os.getenv('OPENAI_API_KEY')
-if not api_key or api_key == 'your-api-key-here':
-    st.warning("OpenAI API key not configured. Please set it in the .env file to use advanced prediction methods.")
+if not api_key:
+    st.warning("⚠️ OpenAI API key not configured. Please add it to your Streamlit secrets to use advanced prediction methods.")
     show_api_instructions = True
 else:
     show_api_instructions = False
 
 if 'openai_predictor' not in st.session_state:
-    if api_key and api_key != 'your-api-key-here':
+    if api_key:
         st.session_state.openai_predictor = OpenAIEmbeddingPredictor(api_key)
         try:
             st.session_state.openai_predictor.load_model()
@@ -69,7 +71,7 @@ if 'openai_predictor' not in st.session_state:
         st.session_state.openai_predictor = None
 
 if 'prompt_predictor' not in st.session_state:
-    if api_key and api_key != 'your-api-key-here':
+    if api_key:
         st.session_state.prompt_predictor = PromptEngineeringPredictor(api_key)
     else:
         st.session_state.prompt_predictor = None
@@ -86,11 +88,14 @@ if show_api_instructions:
     st.info("""
     ### 🔑 Setting up OpenAI API Key
     
-    To use the advanced prediction methods, you need to configure your OpenAI API key:
+    To use the advanced prediction methods, you need to configure your OpenAI API key in Streamlit secrets:
     
-    1. Find the `.env` file in the project root directory
-    2. Replace `your-api-key-here` with your actual OpenAI API key
-    3. Restart the application
+    1. Go to your Streamlit Cloud dashboard
+    2. Navigate to your app's settings
+    3. Add your OpenAI API key in the secrets management section as:
+       ```toml
+       openai_api_key = "your-api-key-here"
+       ```
     
     Until then, you can still use the traditional ML method.
     """)
