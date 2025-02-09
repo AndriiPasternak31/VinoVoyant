@@ -4,14 +4,10 @@ from src.models.country_predictor import WineCountryPredictor
 from src.models.advanced_predictors import OpenAIEmbeddingPredictor, PromptEngineeringPredictor
 import plotly.graph_objects as go
 import os
-from src.config import DEMO_API_KEY
 
 # Create necessary directories
 os.makedirs('models', exist_ok=True)
 os.makedirs('data', exist_ok=True)
-
-# Get OpenAI API key - using demo key for easy deployment
-api_key = DEMO_API_KEY
 
 # Page config
 st.set_page_config(
@@ -20,46 +16,11 @@ st.set_page_config(
     layout="wide"
 )
 
-# Initialize session state
-if 'traditional_predictor' not in st.session_state:
-    st.session_state.traditional_predictor = WineCountryPredictor()
-    model_path = 'models/wine_country_predictor.joblib'
-    
-    if os.path.exists(model_path):
-        try:
-            st.session_state.traditional_predictor.load_model(model_path)
-            st.success("Traditional model loaded successfully!")
-        except Exception as e:
-            st.error(f"Error loading model: {str(e)}")
-            st.warning("Training new model...")
-            try:
-                report = st.session_state.traditional_predictor.train("data/wine_quality_1000.csv")
-                st.session_state.traditional_predictor.save_model(model_path)
-                st.success("Traditional model trained and saved successfully!")
-            except Exception as e:
-                st.error(f"Error training model: {str(e)}")
-    else:
-        st.warning("No trained model found. Training new model...")
-        try:
-            report = st.session_state.traditional_predictor.train("data/wine_quality_1000.csv")
-            st.session_state.traditional_predictor.save_model(model_path)
-            st.success("Traditional model trained and saved successfully!")
-        except Exception as e:
-            st.error(f"Error training model: {str(e)}")
-
-# Initialize OpenAI predictors
-if 'openai_predictor' not in st.session_state:
-    st.session_state.openai_predictor = OpenAIEmbeddingPredictor(api_key)
-    try:
-        st.session_state.openai_predictor.load_model()
-    except:
-        st.warning("No trained OpenAI model found. Training a new model...")
-        report = st.session_state.openai_predictor.train("data/wine_quality_1000.csv")
-        st.session_state.openai_predictor.save_model()
-        st.success("OpenAI model trained and saved successfully!")
-
-if 'prompt_predictor' not in st.session_state:
-    st.session_state.prompt_predictor = PromptEngineeringPredictor(api_key)
+# Initialize session state for API key
+if 'openai_api_key' not in st.session_state:
+    st.session_state.openai_api_key = None
+if 'api_key_configured' not in st.session_state:
+    st.session_state.api_key_configured = False
 
 # App title and description
 st.title("🍷 VinoVoyant - Wine Origin Predictor")
@@ -68,16 +29,70 @@ Discover the likely origin of a wine based on its description! This AI-powered t
 to predict the country of origin using multiple prediction methods. Simply enter a wine description below to get started.
 """)
 
+# API Key Configuration Section
+with st.sidebar:
+    st.header("🔑 API Configuration")
+    api_key = st.text_input(
+        "Enter your OpenAI API Key",
+        type="password",
+        help="Get your API key from https://platform.openai.com/api-keys",
+        key="api_key_input"
+    )
+    
+    if st.button("Configure API Key"):
+        if api_key:
+            st.session_state.openai_api_key = api_key
+            st.session_state.api_key_configured = True
+            st.success("API Key configured successfully!")
+        else:
+            st.error("Please enter an API key")
+
+# Initialize predictors based on API key status
+if 'traditional_predictor' not in st.session_state:
+    st.session_state.traditional_predictor = WineCountryPredictor()
+    model_path = 'models/wine_country_predictor.joblib'
+    
+    if os.path.exists(model_path):
+        try:
+            st.session_state.traditional_predictor.load_model(model_path)
+        except Exception as e:
+            with st.spinner("Training traditional model..."):
+                report = st.session_state.traditional_predictor.train("data/wine_quality_1000.csv")
+                st.session_state.traditional_predictor.save_model(model_path)
+    else:
+        with st.spinner("Training traditional model..."):
+            report = st.session_state.traditional_predictor.train("data/wine_quality_1000.csv")
+            st.session_state.traditional_predictor.save_model(model_path)
+
+# Initialize OpenAI predictors only if API key is configured
+if st.session_state.api_key_configured:
+    if 'openai_predictor' not in st.session_state:
+        with st.spinner("Initializing OpenAI models..."):
+            st.session_state.openai_predictor = OpenAIEmbeddingPredictor(st.session_state.openai_api_key)
+            try:
+                st.session_state.openai_predictor.load_model()
+            except:
+                report = st.session_state.openai_predictor.train("data/wine_quality_1000.csv")
+                st.session_state.openai_predictor.save_model()
+    
+    if 'prompt_predictor' not in st.session_state:
+        st.session_state.prompt_predictor = PromptEngineeringPredictor(st.session_state.openai_api_key)
+
 # Main prediction section
 st.header("🌍 Predict Wine Origin")
 
-# Select prediction method
+# Select prediction method based on API key status
+available_methods = ["Traditional ML (TF-IDF + Logistic Regression)"]
+if st.session_state.api_key_configured:
+    available_methods.extend([
+        "OpenAI Embeddings + ML",
+        "GPT-4 Prompt Engineering"
+    ])
+
 prediction_method = st.radio(
     "Choose Prediction Method:",
-    ["Traditional ML (TF-IDF + Logistic Regression)", 
-     "OpenAI Embeddings + ML",
-     "GPT-4 Prompt Engineering"],
-    help="Select the AI method to use for prediction"
+    available_methods,
+    help="Select the AI method to use for prediction. Advanced methods require OpenAI API key."
 )
 
 # Text input for wine description
@@ -94,10 +109,10 @@ if st.button("Predict Origin"):
             if prediction_method == "Traditional ML (TF-IDF + Logistic Regression)":
                 prediction = st.session_state.traditional_predictor.predict(wine_description)
                 show_reasoning = False
-            elif prediction_method == "OpenAI Embeddings + ML":
+            elif prediction_method == "OpenAI Embeddings + ML" and st.session_state.api_key_configured:
                 prediction = st.session_state.openai_predictor.predict(wine_description)
                 show_reasoning = False
-            else:  # GPT-4 Prompt Engineering
+            elif st.session_state.api_key_configured:  # GPT-4 Prompt Engineering
                 prediction = st.session_state.prompt_predictor.predict(wine_description)
                 show_reasoning = True
             
@@ -148,7 +163,6 @@ if st.button("Predict Origin"):
                     st.code(processed_text)
                 else:
                     st.write("(Advanced embedding analysis - individual terms not available)")
-            
     else:
         st.error("Please enter a wine description first!")
 
@@ -160,14 +174,17 @@ st.markdown("""
 1. **Traditional ML (TF-IDF + Logistic Regression)**
    - Uses traditional text processing and machine learning
    - Fast and lightweight
+   - Available without API key
 
 2. **OpenAI Embeddings + ML**
    - Uses advanced language model embeddings
    - Better understanding of context and nuance
+   - Requires OpenAI API key
 
 3. **GPT-4 Prompt Engineering**
    - Uses advanced language model reasoning
    - Provides detailed analysis and explanation
+   - Requires OpenAI API key
 """)
 
 # Footer
