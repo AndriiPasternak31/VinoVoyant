@@ -11,9 +11,6 @@ import botocore
 import io
 import logging
 
-nltk.download('punkt')
-nltk.download('stopwords')
-
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)

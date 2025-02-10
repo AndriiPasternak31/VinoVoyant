@@ -13,6 +13,8 @@ import nltk
 
 nltk.download('punkt')
 nltk.download('stopwords')
+nltk.download('wordnet')
+nltk.download('omw-1.4')
 
 class TransformerPredictor:
     def __init__(self, use_sagemaker=False):
