@@ -7,11 +7,6 @@ import joblib
 from src.preprocessing import WineDataPreprocessor
 import nltk
 
-nltk.download('punkt')
-nltk.download('stopwords')
-nltk.download('wordnet')
-nltk.download('omw-1.4')
-
 class WineCountryPredictor:
     def __init__(self):
         self.preprocessor = WineDataPreprocessor()

@@ -11,11 +11,6 @@ import boto3
 import json
 import nltk
 
-nltk.download('punkt')
-nltk.download('stopwords')
-nltk.download('wordnet')
-nltk.download('omw-1.4')
-
 class TransformerPredictor:
     def __init__(self, use_sagemaker=False):
         self.use_sagemaker = use_sagemaker

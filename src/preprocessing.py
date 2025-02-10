@@ -10,33 +10,77 @@ import boto3
 import botocore
 import io
 import logging
+import os
+import sys
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Download NLTK data with better error handling
-def ensure_nltk_data():
-    """Ensure all required NLTK data is downloaded."""
-    required_resources = {
-        'tokenizers': ['punkt'],
-        'corpora': ['stopwords']
-    }
+def setup_nltk():
+    """Set up NLTK with comprehensive error handling for different environments."""
+    # Define possible NLTK data directories
+    possible_dirs = [
+        os.path.join(os.getcwd(), 'nltk_data'),  # Local app directory
+        os.path.join(os.path.expanduser('~'), 'nltk_data'),  # User's home directory
+        '/usr/local/share/nltk_data',  # System-wide directory
+        '/usr/share/nltk_data',  # Alternative system directory
+        os.path.dirname(os.path.abspath(__file__))  # Current module directory
+    ]
     
-    for resource_type, resources in required_resources.items():
-        for resource in resources:
+    # Create app-specific directory
+    app_nltk_dir = possible_dirs[0]
+    os.makedirs(app_nltk_dir, exist_ok=True)
+    
+    # Add all possible directories to NLTK's search path
+    for dir_path in possible_dirs:
+        if dir_path not in nltk.data.path:
+            nltk.data.path.append(dir_path)
+    
+    # Required NLTK resources
+    resources = [
+        ('tokenizers/punkt', 'punkt'),
+        ('corpora/stopwords', 'stopwords'),
+        ('tokenizers/punkt/english.pickle', 'punkt'),
+        ('corpora/wordnet', 'wordnet'),
+        ('corpora/omw-1.4', 'omw-1.4')
+    ]
+    
+    downloaded_resources = set()
+    
+    # Try downloading resources with multiple attempts and fallbacks
+    for resource_path, resource_name in resources:
+        if resource_name in downloaded_resources:
+            continue
+            
+        success = False
+        for attempt in range(2):  # Try twice
             try:
-                nltk.data.find(f'{resource_type}/{resource}')
-                logger.info(f"Found NLTK resource: {resource}")
-            except LookupError:
                 try:
-                    nltk.download(resource, quiet=True)
-                    logger.info(f"Successfully downloaded NLTK resource: {resource}")
-                except Exception as e:
-                    logger.warning(f"Failed to download NLTK resource {resource}: {str(e)}")
+                    nltk.data.find(resource_path)
+                    logger.info(f"Found NLTK resource: {resource_name}")
+                    success = True
+                except LookupError:
+                    logger.info(f"Downloading NLTK resource: {resource_name}")
+                    nltk.download(resource_name, download_dir=app_nltk_dir, quiet=True)
+                    success = True
+            except Exception as e:
+                if attempt == 0:
+                    logger.warning(f"First attempt to get {resource_name} failed: {str(e)}")
+                    continue
+                else:
+                    logger.warning(f"Failed to download NLTK resource {resource_name}: {str(e)}")
+            
+            if success:
+                downloaded_resources.add(resource_name)
+                break
+    
+    return bool(downloaded_resources)
 
-# Initialize NLTK resources
-ensure_nltk_data()
+# Initialize NLTK setup
+nltk_initialized = setup_nltk()
+if not nltk_initialized:
+    logger.warning("NLTK initialization had issues - falling back to basic text processing")
 
 class WineDataPreprocessor:
     def __init__(self):
@@ -51,12 +95,13 @@ class WineDataPreprocessor:
         boto3.setup_default_session(region_name=self.s3_region)
         logger.info(f"Initialized WineDataPreprocessor with S3 bucket: {self.s3_bucket} in region: {self.s3_region}")
         
-        # Initialize stopwords with fallback
-        try:
-            self.stop_words = set(stopwords.words('english'))
-        except Exception as e:
-            logger.warning(f"Failed to load stopwords, using empty set: {str(e)}")
-            self.stop_words = set()
+        # Initialize stopwords with robust fallback
+        self.stop_words = set()
+        if nltk_initialized:
+            try:
+                self.stop_words = set(stopwords.words('english'))
+            except Exception as e:
+                logger.warning(f"Failed to load stopwords, using empty set: {str(e)}")
     
     def load_data(self, file_path):
         """Load the wine dataset from S3."""
@@ -115,7 +160,7 @@ class WineDataPreprocessor:
         return df_clean
     
     def preprocess_text(self, text):
-        """Clean and preprocess text data with fallback options."""
+        """Clean and preprocess text data with robust fallback options."""
         if not isinstance(text, str):
             return ""
         
@@ -123,12 +168,26 @@ class WineDataPreprocessor:
         text = text.lower()
         text = re.sub(r'[^a-zA-Z\s]', '', text)
         
-        try:
-            # Try NLTK tokenization
-            tokens = word_tokenize(text)
-        except Exception as e:
-            logger.warning(f"NLTK tokenization failed, falling back to simple split: {str(e)}")
+        # Tokenization with multiple fallback options
+        tokens = []
+        if nltk_initialized:
+            try:
+                # Try NLTK word_tokenize
+                tokens = word_tokenize(text)
+            except Exception as e1:
+                logger.warning(f"Primary tokenization failed: {str(e1)}")
+                try:
+                    # Try loading punkt directly
+                    tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
+                    tokens = tokenizer.tokenize(text)
+                except Exception as e2:
+                    logger.warning(f"Secondary tokenization failed: {str(e2)}")
+                    tokens = text.split()
+                    logger.info("Using simple split tokenization as fallback")
+        else:
+            # If NLTK initialization failed, use simple split
             tokens = text.split()
+            logger.info("Using simple split tokenization (NLTK not initialized)")
         
         # Remove stopwords if available
         tokens = [token for token in tokens if token not in self.stop_words]
