@@ -79,12 +79,12 @@ if page == "Prediction":
     # Initialize predictors
     if 'traditional_predictor' not in st.session_state:
         with st.spinner("Initializing traditional model..."):
-            st.session_state.traditional_predictor = WineCountryPredictor()
-            model_path = 'models/wine_country_predictor.joblib'
-            
-            # Force a data reload to see where it's coming from
-            logger.info("Training new model to check data source...")
             try:
+                st.session_state.traditional_predictor = WineCountryPredictor()
+                model_path = 'models/wine_country_predictor.joblib'
+                
+                # Force a data reload to see where it's coming from
+                logger.info("Training new model to check data source...")
                 report = st.session_state.traditional_predictor.train("data/wine_quality_1000.csv")
                 st.session_state.traditional_predictor.save_model(model_path)
                 logger.info("Successfully trained and saved new model")
@@ -93,20 +93,34 @@ if page == "Prediction":
                 data_source = getattr(st.session_state.traditional_predictor.preprocessor, 'last_data_source', 'Unknown')
                 if data_source == "S3":
                     data_source_placeholder.success("✅ Data loaded from AWS S3")
+                    st.session_state.data_loaded = True
                 else:
                     data_source_placeholder.error("❌ Error loading data from S3")
+                    st.error("Failed to load data from S3. Please try again.")
+                    st.session_state.data_loaded = False
             except Exception as e:
                 logger.error(f"Error during model training: {str(e)}")
                 data_source_placeholder.error("❌ Error loading data from S3")
+                st.error(f"Error initializing model: {str(e)}")
+                st.session_state.data_loaded = False
 
-    if 'transformer_predictor' not in st.session_state:
+    if 'transformer_predictor' not in st.session_state and st.session_state.get('data_loaded', False):
         with st.spinner("Initializing transformer model..."):
-            st.session_state.transformer_predictor = TransformerPredictor(use_sagemaker=False)  # Use local mode for now
+            try:
+                st.session_state.transformer_predictor = TransformerPredictor(use_sagemaker=False)
+                logger.info("Successfully initialized transformer model")
+            except Exception as e:
+                logger.error(f"Error initializing transformer model: {str(e)}")
+                st.error("Error initializing transformer model. Traditional ML will still work.")
 
     # Initialize LLM predictor only if API key is configured
-    if st.session_state.api_key_configured:
-        if 'llm_predictor' not in st.session_state:
+    if st.session_state.api_key_configured and 'llm_predictor' not in st.session_state:
+        try:
             st.session_state.llm_predictor = DetailedPromptPredictor(st.session_state.candidate_api_key)
+            logger.info("Successfully initialized LLM predictor")
+        except Exception as e:
+            logger.error(f"Error initializing LLM predictor: {str(e)}")
+            st.error("Error initializing LLM predictor. Other methods will still work.")
 
     # Main prediction section
     st.header("🌍 Predict Wine Origin")

@@ -13,20 +13,22 @@ import json
 class TransformerPredictor:
     def __init__(self, use_sagemaker=False):
         self.use_sagemaker = use_sagemaker
-        self.label_encoder = None  # Initialize here
+        self.label_encoder = None
         
         if not use_sagemaker:
             try:
+                # Suppress PyTorch-related warnings
                 import warnings
                 warnings.filterwarnings('ignore', category=RuntimeWarning, module='torch')
+                warnings.filterwarnings('ignore', message='.*__path__._path.*')
+                warnings.filterwarnings('ignore', message='.*Tried to instantiate.*')
                 
                 # Local model initialization
                 self.tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
                 self.model = DistilBertModel.from_pretrained('distilbert-base-uncased')
                 self.classifier = LogisticRegression(max_iter=1000)
-                print("Successfully initialized local transformer model")
                 
-                # Train the model immediately
+                # Train the model only once
                 try:
                     print("Training transformer classifier...")
                     self.train("data/wine_quality_1000.csv")
