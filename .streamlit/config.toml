@@ -1,8 +1,24 @@
 [server]
 # Disable file watcher for certain packages
 fileWatcherType = "poll"
+enableXsrfProtection = false
+enableCORS = false
 
 [runner]
 # Disable module watcher for torch and related modules
 fastReruns = true
-postScriptGC = true 
+postScriptGC = true
+magicEnabled = false
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "light"
+
+[client]
+showErrorDetails = true
+
+[logger]
+level = "info"
+messageFormat = "%(asctime)s - %(name)s - %(levelname)s - %(message)s" 

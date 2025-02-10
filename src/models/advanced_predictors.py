@@ -234,10 +234,22 @@ class TransformerPredictor:
         if not self.use_sagemaker:
             try:
                 model_data = {
-                    'classifier': self.classifier,
+                    'fallback_mode': self.fallback_mode,
                     'label_encoder': self.label_encoder
                 }
+                
+                if self.fallback_mode:
+                    model_data.update({
+                        'fallback_vectorizer': self.fallback_vectorizer,
+                        'fallback_classifier': self.fallback_classifier
+                    })
+                else:
+                    model_data.update({
+                        'classifier': self.classifier
+                    })
+                
                 joblib.dump(model_data, model_path)
+                logger.info(f"Successfully saved model to {model_path}")
             except Exception as e:
                 logger.error(f"Error saving model: {str(e)}")
                 raise
@@ -247,8 +259,16 @@ class TransformerPredictor:
         if not self.use_sagemaker:
             try:
                 model_data = joblib.load(model_path)
-                self.classifier = model_data['classifier']
+                self.fallback_mode = model_data['fallback_mode']
                 self.label_encoder = model_data['label_encoder']
+                
+                if self.fallback_mode:
+                    self.fallback_vectorizer = model_data['fallback_vectorizer']
+                    self.fallback_classifier = model_data['fallback_classifier']
+                else:
+                    self.classifier = model_data['classifier']
+                
+                logger.info(f"Successfully loaded model from {model_path}")
             except Exception as e:
                 logger.error(f"Error loading model: {str(e)}")
                 raise
