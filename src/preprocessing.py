@@ -15,19 +15,28 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Download all required NLTK data
-try:
-    # Download essential data
-    nltk.download('punkt')
-    nltk.download('stopwords')
-    nltk.download('averaged_perceptron_tagger')
-    nltk.download('maxent_ne_chunker')
-    nltk.download('words')
+# Download NLTK data with better error handling
+def ensure_nltk_data():
+    """Ensure all required NLTK data is downloaded."""
+    required_resources = {
+        'tokenizers': ['punkt'],
+        'corpora': ['stopwords']
+    }
     
-    # Verify punkt is available
-    nltk.data.find('tokenizers/punkt')
-except Exception as e:
-    logger.warning(f"NLTK data download failed: {str(e)}")
+    for resource_type, resources in required_resources.items():
+        for resource in resources:
+            try:
+                nltk.data.find(f'{resource_type}/{resource}')
+                logger.info(f"Found NLTK resource: {resource}")
+            except LookupError:
+                try:
+                    nltk.download(resource, quiet=True)
+                    logger.info(f"Successfully downloaded NLTK resource: {resource}")
+                except Exception as e:
+                    logger.warning(f"Failed to download NLTK resource {resource}: {str(e)}")
+
+# Initialize NLTK resources
+ensure_nltk_data()
 
 class WineDataPreprocessor:
     def __init__(self):
@@ -42,15 +51,12 @@ class WineDataPreprocessor:
         boto3.setup_default_session(region_name=self.s3_region)
         logger.info(f"Initialized WineDataPreprocessor with S3 bucket: {self.s3_bucket} in region: {self.s3_region}")
         
-        # Ensure NLTK resources are available
+        # Initialize stopwords with fallback
         try:
-            nltk.data.find('tokenizers/punkt')
-        except LookupError:
-            nltk.download('punkt')
-        try:
-            nltk.data.find('corpora/stopwords')
-        except LookupError:
-            nltk.download('stopwords')
+            self.stop_words = set(stopwords.words('english'))
+        except Exception as e:
+            logger.warning(f"Failed to load stopwords, using empty set: {str(e)}")
+            self.stop_words = set()
     
     def load_data(self, file_path):
         """Load the wine dataset from S3."""
@@ -109,29 +115,25 @@ class WineDataPreprocessor:
         return df_clean
     
     def preprocess_text(self, text):
-        """Clean and preprocess text data."""
+        """Clean and preprocess text data with fallback options."""
         if not isinstance(text, str):
             return ""
-            
-        # Convert to lowercase
-        text = text.lower()
         
-        # Remove special characters and digits
+        # Basic cleaning (always performed)
+        text = text.lower()
         text = re.sub(r'[^a-zA-Z\s]', '', text)
         
         try:
-            # Tokenization with error handling
+            # Try NLTK tokenization
             tokens = word_tokenize(text)
-            
-            # Remove stopwords
-            stop_words = set(stopwords.words('english'))
-            tokens = [token for token in tokens if token not in stop_words]
-            
-            return ' '.join(tokens)
         except Exception as e:
-            print(f"Error in text preprocessing: {str(e)}")
-            # Return cleaned text even if tokenization fails
-            return text
+            logger.warning(f"NLTK tokenization failed, falling back to simple split: {str(e)}")
+            tokens = text.split()
+        
+        # Remove stopwords if available
+        tokens = [token for token in tokens if token not in self.stop_words]
+        
+        return ' '.join(tokens)
     
     def engineer_features(self, df):
         """Create new features from existing data."""
