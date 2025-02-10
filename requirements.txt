@@ -4,8 +4,6 @@ numpy
 matplotlib
 seaborn
 plotly
-nltk
-spacy
 scikit-learn
 transformers
 torch

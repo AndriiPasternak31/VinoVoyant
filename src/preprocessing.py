@@ -2,9 +2,6 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.feature_extraction.text import TfidfVectorizer
-import nltk
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
 import re
 import boto3
 import botocore
@@ -15,25 +12,16 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Download all required NLTK data
-try:
-    # Download essential data
-    nltk.download('punkt')
-    nltk.download('stopwords')
-    nltk.download('averaged_perceptron_tagger')
-    nltk.download('maxent_ne_chunker')
-    nltk.download('words')
-    
-    # Verify punkt is available
-    nltk.data.find('tokenizers/punkt')
-except Exception as e:
-    logger.warning(f"NLTK data download failed: {str(e)}")
-
 class WineDataPreprocessor:
     def __init__(self):
         self.label_encoders = {}
         self.scaler = StandardScaler()
-        self.tfidf = TfidfVectorizer(max_features=100)
+        self.tfidf = TfidfVectorizer(
+            max_features=100,
+            stop_words='english',  # Built-in English stop words
+            lowercase=True,
+            strip_accents='unicode'
+        )
         self.s3_bucket = "vino-voyant-wine-origin-predictor"
         self.s3_region = "eu-north-1"
         self.last_data_source = None  # Track the last successful data source
@@ -41,16 +29,6 @@ class WineDataPreprocessor:
         # Configure AWS for public access
         boto3.setup_default_session(region_name=self.s3_region)
         logger.info(f"Initialized WineDataPreprocessor with S3 bucket: {self.s3_bucket} in region: {self.s3_region}")
-        
-        # Ensure NLTK resources are available
-        try:
-            nltk.data.find('tokenizers/punkt')
-        except LookupError:
-            nltk.download('punkt')
-        try:
-            nltk.data.find('corpora/stopwords')
-        except LookupError:
-            nltk.download('stopwords')
     
     def load_data(self, file_path):
         """Load the wine dataset from S3."""
@@ -121,21 +99,12 @@ class WineDataPreprocessor:
         text = text.lower()
         
         # Remove special characters and digits
-        text = re.sub(r'[^a-zA-Z\s]', '', text)
+        text = re.sub(r'[^a-zA-Z\s]', ' ', text)
         
-        try:
-            # Tokenization with error handling
-            tokens = word_tokenize(text)
-            
-            # Remove stopwords
-            stop_words = set(stopwords.words('english'))
-            tokens = [token for token in tokens if token not in stop_words]
-            
-            return ' '.join(tokens)
-        except Exception as e:
-            print(f"Error in text preprocessing: {str(e)}")
-            # Return cleaned text even if tokenization fails
-            return text
+        # Remove extra whitespace
+        text = ' '.join(text.split())
+        
+        return text
     
     def engineer_features(self, df):
         """Create new features from existing data."""
