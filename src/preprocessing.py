@@ -10,36 +10,30 @@ import boto3
 import botocore
 import io
 import logging
-import os
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Download NLTK data with better error handling
 def ensure_nltk_data():
-    """Ensure all required NLTK data is downloaded with robust error handling."""
-    # Set NLTK data path to a writable location
-    nltk_data_dir = os.path.join(os.path.expanduser("~"), "nltk_data")
-    os.makedirs(nltk_data_dir, exist_ok=True)
-    nltk.data.path.append(nltk_data_dir)
-    
+    """Ensure all required NLTK data is downloaded."""
     required_resources = {
-        'tokenizers/punkt': 'punkt',
-        'corpora/stopwords': 'stopwords'
+        'tokenizers': ['punkt'],
+        'corpora': ['stopwords']
     }
     
-    for resource_path, resource_name in required_resources.items():
-        try:
-            # Try to load the resource
-            nltk.data.find(resource_path)
-            logger.info(f"Found NLTK resource: {resource_name}")
-        except LookupError:
+    for resource_type, resources in required_resources.items():
+        for resource in resources:
             try:
-                # Try to download the resource
-                nltk.download(resource_name, quiet=True, download_dir=nltk_data_dir)
-                logger.info(f"Successfully downloaded NLTK resource: {resource_name}")
-            except Exception as e:
-                logger.warning(f"Failed to download NLTK resource {resource_name}: {str(e)}")
+                nltk.data.find(f'{resource_type}/{resource}')
+                logger.info(f"Found NLTK resource: {resource}")
+            except LookupError:
+                try:
+                    nltk.download(resource, quiet=True)
+                    logger.info(f"Successfully downloaded NLTK resource: {resource}")
+                except Exception as e:
+                    logger.warning(f"Failed to download NLTK resource {resource}: {str(e)}")
 
 # Initialize NLTK resources
 ensure_nltk_data()
@@ -57,16 +51,12 @@ class WineDataPreprocessor:
         boto3.setup_default_session(region_name=self.s3_region)
         logger.info(f"Initialized WineDataPreprocessor with S3 bucket: {self.s3_bucket} in region: {self.s3_region}")
         
-        # Initialize stopwords with robust fallback
+        # Initialize stopwords with fallback
         try:
             self.stop_words = set(stopwords.words('english'))
-            logger.info("Successfully loaded stopwords")
         except Exception as e:
-            logger.warning(f"Failed to load stopwords, using basic set: {str(e)}")
-            # Basic English stopwords as fallback
-            self.stop_words = {'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for',
-                             'from', 'has', 'he', 'in', 'is', 'it', 'its', 'of', 'on',
-                             'that', 'the', 'to', 'was', 'were', 'will', 'with'}
+            logger.warning(f"Failed to load stopwords, using empty set: {str(e)}")
+            self.stop_words = set()
     
     def load_data(self, file_path):
         """Load the wine dataset from S3."""
@@ -125,7 +115,7 @@ class WineDataPreprocessor:
         return df_clean
     
     def preprocess_text(self, text):
-        """Clean and preprocess text data with robust fallback options."""
+        """Clean and preprocess text data with fallback options."""
         if not isinstance(text, str):
             return ""
         
@@ -136,13 +126,11 @@ class WineDataPreprocessor:
         try:
             # Try NLTK tokenization
             tokens = word_tokenize(text)
-            logger.debug("Successfully used NLTK tokenization")
         except Exception as e:
-            # Fallback to basic splitting
-            logger.debug(f"Using simple split for tokenization: {str(e)}")
+            logger.warning(f"NLTK tokenization failed, falling back to simple split: {str(e)}")
             tokens = text.split()
         
-        # Remove stopwords
+        # Remove stopwords if available
         tokens = [token for token in tokens if token not in self.stop_words]
         
         return ' '.join(tokens)
