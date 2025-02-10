@@ -178,3 +178,12 @@ models/*.joblib
 
 # Local development
 .DS_Store
+
+# Sensitive/secret files
+.env
+.streamlit/secrets.toml
+*.env
+.env.*
+
+# Local configuration
+src/config.py
