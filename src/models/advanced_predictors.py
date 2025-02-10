@@ -9,6 +9,10 @@ import torch
 from sklearn.linear_model import LogisticRegression
 import boto3
 import json
+import nltk
+
+nltk.download('punkt')
+nltk.download('stopwords')
 
 class TransformerPredictor:
     def __init__(self, use_sagemaker=False):

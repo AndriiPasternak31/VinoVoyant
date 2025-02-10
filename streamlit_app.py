@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import nltk
 from src.models.country_predictor import WineCountryPredictor
 from src.models.advanced_predictors import TransformerPredictor, DetailedPromptPredictor
 import plotly.graph_objects as go
@@ -15,6 +16,9 @@ from src.analytics import (
     create_correlation_heatmap,
     create_variety_price_distribution
 )
+
+nltk.download('punkt')
+nltk.download('stopwords')
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

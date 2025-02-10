@@ -7,9 +7,14 @@ import numpy as np
 from textblob import TextBlob
 import requests
 import json
+import nltk
+
+nltk.download('punkt')
+nltk.download('stopwords')
 
 def generate_insight(data_description, visualization_type, metrics):
     """Generate business insight using LLM."""
+
     try:
         api_key = None
         try:

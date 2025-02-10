@@ -5,6 +5,10 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
 import joblib
 from src.preprocessing import WineDataPreprocessor
+import nltk
+
+nltk.download('punkt')
+nltk.download('stopwords')
 
 class WineCountryPredictor:
     def __init__(self):
