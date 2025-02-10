@@ -1,0 +1,8 @@
+[server]
+# Disable file watcher for certain packages
+fileWatcherType = "poll"
+
+[runner]
+# Disable module watcher for torch and related modules
+fastReruns = true
+postScriptGC = true 

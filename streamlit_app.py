@@ -17,6 +17,11 @@ from src.analytics import (
     create_variety_price_distribution
 )
 
+# Configure Streamlit to not watch certain modules
+import sys
+if not os.environ.get('STREAMLIT_DISABLE_TORCH_WATCH'):
+    os.environ['STREAMLIT_DISABLE_TORCH_WATCH'] = 'true'
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
