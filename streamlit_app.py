@@ -1,12 +1,10 @@
 import streamlit as st
 import pandas as pd
-import nltk
 from src.models.country_predictor import WineCountryPredictor
 from src.models.advanced_predictors import TransformerPredictor, DetailedPromptPredictor
 import plotly.graph_objects as go
 import os
 import logging
-import sys
 from src.analytics import (
     load_and_preprocess_data,
     create_ratings_distribution,
@@ -18,32 +16,13 @@ from src.analytics import (
     create_variety_price_distribution
 )
 
-# Configure logging first
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Create necessary directories
 os.makedirs('models', exist_ok=True)
 os.makedirs('data', exist_ok=True)
-
-# Configure environment variables
-if not os.environ.get('STREAMLIT_DISABLE_TORCH_WATCH'):
-    os.environ['STREAMLIT_DISABLE_TORCH_WATCH'] = 'true'
-
-# Initialize NLTK data
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    try:
-        nltk.download('punkt', quiet=True)
-    except Exception as e:
-        logger.warning(f"Failed to download NLTK data: {e}")
 
 # Page config
 st.set_page_config(
@@ -52,51 +31,19 @@ st.set_page_config(
     layout="wide"
 )
 
-# Initialize predictors in session state
-@st.cache_resource
-def init_traditional_predictor():
-    try:
-        predictor = WineCountryPredictor()
-        model_path = 'models/wine_country_predictor.joblib'
-        if os.path.exists(model_path):
-            predictor.load_model(model_path)
-        else:
-            predictor.train("data/wine_quality_1000.csv")
-            predictor.save_model(model_path)
-        return predictor
-    except Exception as e:
-        logger.error(f"Error initializing traditional predictor: {e}")
-        return None
-
-@st.cache_resource
-def init_transformer_predictor():
-    try:
-        return TransformerPredictor(use_sagemaker=False)
-    except Exception as e:
-        logger.error(f"Error initializing transformer predictor: {e}")
-        return None
-
-# Initialize session state
-if 'initialized' not in st.session_state:
-    st.session_state.initialized = False
-    st.session_state.candidate_api_key = None
-    st.session_state.api_key_configured = False
-    try:
-        st.session_state.candidate_api_key = st.secrets["candidate"]["api_key"]
-        st.session_state.api_key_configured = True
-    except:
-        pass
-
 # Add navigation
 page = st.sidebar.radio("Navigation", ["Prediction", "Analytics"])
 
 if page == "Prediction":
-    # Initialize models if not done yet
-    if not st.session_state.initialized:
-        with st.spinner("Initializing models..."):
-            st.session_state.traditional_predictor = init_traditional_predictor()
-            st.session_state.transformer_predictor = init_transformer_predictor()
-            st.session_state.initialized = True
+    # Initialize session state for API key
+    if 'candidate_api_key' not in st.session_state:
+        # Try to get API key from Streamlit secrets first
+        try:
+            st.session_state.candidate_api_key = st.secrets["candidate"]["api_key"]
+            st.session_state.api_key_configured = True
+        except:
+            st.session_state.candidate_api_key = None
+            st.session_state.api_key_configured = False
 
     # App title and description
     st.title("🍷 VinoVoyant - Wine Origin Predictor")
@@ -129,6 +76,33 @@ if page == "Prediction":
                 else:
                     st.error("Please enter an API key")
 
+    # Initialize predictors
+    if 'traditional_predictor' not in st.session_state:
+        with st.spinner("Initializing traditional model..."):
+            st.session_state.traditional_predictor = WineCountryPredictor()
+            model_path = 'models/wine_country_predictor.joblib'
+            
+            # Force a data reload to see where it's coming from
+            logger.info("Training new model to check data source...")
+            try:
+                report = st.session_state.traditional_predictor.train("data/wine_quality_1000.csv")
+                st.session_state.traditional_predictor.save_model(model_path)
+                logger.info("Successfully trained and saved new model")
+
+                # Update data source indicator
+                data_source = getattr(st.session_state.traditional_predictor.preprocessor, 'last_data_source', 'Unknown')
+                if data_source == "S3":
+                    data_source_placeholder.success("✅ Data loaded from AWS S3")
+                else:
+                    data_source_placeholder.error("❌ Error loading data from S3")
+            except Exception as e:
+                logger.error(f"Error during model training: {str(e)}")
+                data_source_placeholder.error("❌ Error loading data from S3")
+
+    if 'transformer_predictor' not in st.session_state:
+        with st.spinner("Initializing transformer model..."):
+            st.session_state.transformer_predictor = TransformerPredictor(use_sagemaker=False)  # Use local mode for now
+
     # Initialize LLM predictor only if API key is configured
     if st.session_state.api_key_configured:
         if 'llm_predictor' not in st.session_state:
@@ -140,7 +114,7 @@ if page == "Prediction":
     # Select prediction method based on API key status
     available_methods = [
         "Traditional ML (TF-IDF + Logistic Regression)",
-        "Transformer (DistilBERT)"
+        "Transformer (DistilBERT on SageMaker)"
     ]
     if st.session_state.api_key_configured:
         available_methods.append("Expert LLM Analysis")
@@ -163,7 +137,7 @@ if page == "Prediction":
         if prediction_method == "Traditional ML (TF-IDF + Logistic Regression)":
             prediction = st.session_state.traditional_predictor.predict(wine_description)
             return prediction, False
-        elif prediction_method == "Transformer (DistilBERT)":
+        elif prediction_method == "Transformer (DistilBERT on SageMaker)":
             try:
                 prediction = st.session_state.transformer_predictor.predict(wine_description)
                 if prediction['predicted_country'] == 'Error':
@@ -254,10 +228,13 @@ if page == "Prediction":
     1. **Traditional ML (TF-IDF + Logistic Regression)**
        - Uses traditional text processing and machine learning
        - Fast and lightweight
+       - Available without API key
 
-    2. **Transformer (DistilBERT)**
+    2. **Transformer (DistilBERT on SageMaker)**
        - Uses state-of-the-art transformer model
+       - Hosted on AWS SageMaker for scalability
        - Better understanding of language context
+       - No GPU required on client side
 
     3. **Expert LLM Analysis**
        - Uses GPT-4o-mini with wine expertise prompt

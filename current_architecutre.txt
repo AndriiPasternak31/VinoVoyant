@@ -1,0 +1,127 @@
+VinoVoyant - Current Architecture Diagram
+=====================================
+
+                                                     +----------------+
+                                                     |  CloudWatch    |
+                                                     |   Monitoring   |
+                                                     +-------+--------+
+                                                             |
+                                                             v
++-------------+     +--------------+     +------------------+     +--------+
+|             |     |              |     |                  |     |        |
+|  Streamlit  +---->+  Streamlit   +---->+    Application   +---->+  S3    |
+|   Cloud     |     |    App       |     |      Logic       |     | Bucket |
+|             |     |              |     |                  |     |        |
++-------------+     +--------------+     +------------------+     +--------+
+                           |                      |                   ^
+                           |                      |                   |
+                           v                      v                   |
+                    +--------------+     +------------------+         |
+                    |   Session    |     |     Models      |         |
+                    |    State     |     |    & Data       +---------+
+                    +--------------+     +------------------+
+
+Core Components:
+---------------
+
+1. Streamlit Cloud (Deployment Platform)
+   - Hosts the application
+   - Manages dependencies
+   - Handles scaling
+   - Provides logging
+
+2. Streamlit App (User Interface)
+   |-- Main Navigation
+   |   |-- Prediction Page
+   |   |-- Analytics Page
+   |
+   |-- Components
+       |-- Model Selection
+       |-- Input Form
+       |-- Visualization
+       |-- Results Display
+
+3. Application Logic
+   |-- Data Management
+   |   |-- WineDataPreprocessor
+   |   |   |-- Data Loading (S3)
+   |   |   |-- Text Processing (NLTK)
+   |   |   |-- Feature Engineering
+   |   |   |-- Data Cleaning
+   |   |   `-- Encoding/Scaling
+   |
+   |-- Models
+   |   |-- Traditional ML (WineCountryPredictor)
+   |   |   |-- TF-IDF
+   |   |   |-- Logistic Regression
+   |   |   `-- Model Metrics
+   |   |
+   |   |-- Transformer (TransformerPredictor)
+   |   |   |-- DistilBERT
+   |   |   |-- Feature Extraction
+   |   |   `-- Classification
+   |   |
+   |   `-- LLM Integration (DetailedPromptPredictor)
+   |       |-- API Integration
+   |       |-- Prompt Engineering
+   |       `-- Response Processing
+   |
+   `-- Analytics Engine
+       |-- Data Visualization
+       |-- Statistical Analysis
+       |-- Market Insights
+       `-- LLM-powered Analysis
+
+4. Storage
+   |-- AWS S3
+   |   |-- wine_quality_1000.csv
+   |   |-- Model artifacts
+   |   `-- Analytics data
+   |
+   `-- Local Cache
+       |-- NLTK resources
+       |-- Model states
+       `-- Session data
+
+Data Flows:
+-----------
+1. User Input Flow:
+   User -> Streamlit UI -> Model Selection -> Prediction -> Results
+
+2. Data Loading Flow:
+   S3 -> WineDataPreprocessor -> Feature Engineering -> Models
+
+3. Analytics Flow:
+   Data -> Preprocessing -> Analytics Engine -> Visualizations -> UI
+
+4. Model Training Flow:
+   Data -> Preprocessing -> Model Training -> Model Storage
+
+Security:
+---------
+|-- API Key Management
+|-- Anonymous S3 Access
+|-- Streamlit Secrets
+`-- Environment Variables
+
+Error Handling:
+--------------
+|-- Data Loading Fallbacks
+|-- NLTK Resource Management
+|-- Model Prediction Fallbacks
+`-- User Input Validation
+
+Monitoring:
+----------
+|-- CloudWatch Logs
+|-- Error Tracking
+|-- Performance Metrics
+`-- User Analytics
+
+This architecture demonstrates:
+1. Modular Design
+2. Scalable Components
+3. Robust Error Handling
+4. Multiple AI Approaches
+5. Comprehensive Analytics
+6. Secure Data Management 

@@ -187,8 +187,3 @@ models/*.joblib
 
 # Local configuration
 src/config.py
-
-architecture_diagram.txt
-architecture_proposal.txt
-current_architecutre.txt
-technical_report.txt

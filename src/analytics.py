@@ -7,11 +7,9 @@ import numpy as np
 from textblob import TextBlob
 import requests
 import json
-import nltk
 
 def generate_insight(data_description, visualization_type, metrics):
     """Generate business insight using LLM."""
-
     try:
         api_key = None
         try:
@@ -226,9 +224,11 @@ def create_variety_price_distribution(df):
 def load_and_preprocess_data():
     """Load and preprocess data for analytics."""
     try:
-        df = pd.read_csv("data/wine_quality_1000.csv")
+        from src.preprocessing import WineDataPreprocessor
+        preprocessor = WineDataPreprocessor()
+        df = preprocessor.load_data("data/wine_quality_1000.csv")  # Path is ignored, will load from S3
         df = df.dropna()
         return df
     except Exception as e:
-        print(f"Error loading data: {str(e)}")
+        print(f"Error loading data from S3: {str(e)}")
         return None 
