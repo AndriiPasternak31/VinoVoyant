@@ -6,6 +6,7 @@ from src.models.advanced_predictors import TransformerPredictor, DetailedPromptP
 import plotly.graph_objects as go
 import os
 import logging
+import sys
 from src.analytics import (
     load_and_preprocess_data,
     create_ratings_distribution,
@@ -17,18 +18,32 @@ from src.analytics import (
     create_variety_price_distribution
 )
 
-# Configure Streamlit to not watch certain modules
-import sys
-if not os.environ.get('STREAMLIT_DISABLE_TORCH_WATCH'):
-    os.environ['STREAMLIT_DISABLE_TORCH_WATCH'] = 'true'
-
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Configure logging first
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 logger = logging.getLogger(__name__)
 
 # Create necessary directories
 os.makedirs('models', exist_ok=True)
 os.makedirs('data', exist_ok=True)
+
+# Configure environment variables
+if not os.environ.get('STREAMLIT_DISABLE_TORCH_WATCH'):
+    os.environ['STREAMLIT_DISABLE_TORCH_WATCH'] = 'true'
+
+# Initialize NLTK data
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    try:
+        nltk.download('punkt', quiet=True)
+    except Exception as e:
+        logger.warning(f"Failed to download NLTK data: {e}")
 
 # Page config
 st.set_page_config(
@@ -37,19 +52,51 @@ st.set_page_config(
     layout="wide"
 )
 
+# Initialize predictors in session state
+@st.cache_resource
+def init_traditional_predictor():
+    try:
+        predictor = WineCountryPredictor()
+        model_path = 'models/wine_country_predictor.joblib'
+        if os.path.exists(model_path):
+            predictor.load_model(model_path)
+        else:
+            predictor.train("data/wine_quality_1000.csv")
+            predictor.save_model(model_path)
+        return predictor
+    except Exception as e:
+        logger.error(f"Error initializing traditional predictor: {e}")
+        return None
+
+@st.cache_resource
+def init_transformer_predictor():
+    try:
+        return TransformerPredictor(use_sagemaker=False)
+    except Exception as e:
+        logger.error(f"Error initializing transformer predictor: {e}")
+        return None
+
+# Initialize session state
+if 'initialized' not in st.session_state:
+    st.session_state.initialized = False
+    st.session_state.candidate_api_key = None
+    st.session_state.api_key_configured = False
+    try:
+        st.session_state.candidate_api_key = st.secrets["candidate"]["api_key"]
+        st.session_state.api_key_configured = True
+    except:
+        pass
+
 # Add navigation
 page = st.sidebar.radio("Navigation", ["Prediction", "Analytics"])
 
 if page == "Prediction":
-    # Initialize session state for API key
-    if 'candidate_api_key' not in st.session_state:
-        # Try to get API key from Streamlit secrets first
-        try:
-            st.session_state.candidate_api_key = st.secrets["candidate"]["api_key"]
-            st.session_state.api_key_configured = True
-        except:
-            st.session_state.candidate_api_key = None
-            st.session_state.api_key_configured = False
+    # Initialize models if not done yet
+    if not st.session_state.initialized:
+        with st.spinner("Initializing models..."):
+            st.session_state.traditional_predictor = init_traditional_predictor()
+            st.session_state.transformer_predictor = init_transformer_predictor()
+            st.session_state.initialized = True
 
     # App title and description
     st.title("🍷 VinoVoyant - Wine Origin Predictor")
@@ -81,67 +128,6 @@ if page == "Prediction":
                     st.success("API Key configured successfully!")
                 else:
                     st.error("Please enter an API key")
-
-    # Initialize predictors
-    if 'traditional_predictor' not in st.session_state:
-        with st.spinner("Initializing traditional model..."):
-            st.session_state.traditional_predictor = WineCountryPredictor()
-            model_path = 'models/wine_country_predictor.joblib'
-            
-            # Force a data reload to see where it's coming from
-            logger.info("Training new model to check data source...")
-            try:
-                metrics = st.session_state.traditional_predictor.train("data/wine_quality_1000.csv")
-                st.session_state.traditional_predictor.save_model(model_path)
-                logger.info("Successfully trained and saved new model")
-
-                # Update data source indicator with more details
-                data_source = getattr(st.session_state.traditional_predictor.preprocessor, 'last_data_source', 'Unknown')
-                if data_source == "S3":
-                    data_source_placeholder.success("✅ Data loaded from AWS S3")
-                elif data_source == "Local File":
-                    data_source_placeholder.warning("⚠️ Using local file (S3 access failed)")
-                else:
-                    data_source_placeholder.error("❌ Unknown data source")
-                
-                # Display model metrics in sidebar
-                with st.sidebar:
-                    st.header("📊 Model Performance")
-                    
-                    # Overall metrics
-                    st.subheader("Overall Metrics")
-                    overall_metrics = metrics['basic_metrics']['weighted avg']
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.metric("Precision", f"{overall_metrics['precision']:.2f}")
-                        st.metric("Recall", f"{overall_metrics['recall']:.2f}")
-                    with col2:
-                        st.metric("F1-Score", f"{overall_metrics['f1-score']:.2f}")
-                        st.metric("Support", overall_metrics['support'])
-                    
-                    # Show confusion matrix
-                    st.subheader("Confusion Matrix")
-                    fig = go.Figure(data=go.Heatmap(
-                        z=metrics['confusion_matrix']['matrix'],
-                        x=metrics['confusion_matrix']['labels'],
-                        y=metrics['confusion_matrix']['labels'],
-                        colorscale='Blues'
-                    ))
-                    fig.update_layout(height=300)
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                    # Feature importance
-                    st.subheader("Top Features")
-                    for feature, importance in metrics['feature_importance'].items():
-                        st.metric(feature, f"{importance:.3f}")
-                    
-            except Exception as e:
-                logger.error(f"Error during model training: {str(e)}")
-                data_source_placeholder.error("❌ Error loading data")
-
-    if 'transformer_predictor' not in st.session_state:
-        with st.spinner("Initializing transformer model..."):
-            st.session_state.transformer_predictor = TransformerPredictor(use_sagemaker=False)  # Use local mode for now
 
     # Initialize LLM predictor only if API key is configured
     if st.session_state.api_key_configured:

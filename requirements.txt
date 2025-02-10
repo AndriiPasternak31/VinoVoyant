@@ -10,13 +10,13 @@ scikit-learn>=1.2.0
 transformers==4.30.2
 torch>=2.0.0
 sentence-transformers>=2.2.2
-streamlit
 boto3>=1.26.0
 joblib>=1.2.0
-pickle-mixin
-jupyter
-tqdm
 requests>=2.28.0
+python-dotenv>=1.0.0
+textblob>=0.17.1
+pickle-mixin
+tqdm
 beautifulsoup4
 pytest
 pytest-cov
@@ -30,5 +30,3 @@ fastapi
 uvicorn
 httpx
 wordcloud
-python-dotenv>=1.0.0
-textblob>=0.17.1

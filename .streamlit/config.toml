@@ -3,21 +3,32 @@
 fileWatcherType = "poll"
 enableXsrfProtection = false
 enableCORS = false
+maxUploadSize = 200
+port = 8501
+address = "0.0.0.0"
 
 [runner]
 # Disable module watcher for torch and related modules
 fastReruns = true
 postScriptGC = true
 magicEnabled = false
+# Increase memory limit
+memory_limit = "1000Mi"
+# Handle imports better
+handledException = true
+# Set timeout
+scriptRunnerTimeoutSec = 120
 
 [browser]
 gatherUsageStats = false
+serverAddress = "localhost"
 
 [theme]
 base = "light"
 
 [client]
 showErrorDetails = true
+toolbarMode = "minimal"
 
 [logger]
 level = "info"
