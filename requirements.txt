@@ -8,9 +8,10 @@ nltk
 spacy
 scikit-learn
 transformers
+torch
 sentence-transformers
 streamlit
-boto3
+boto3>=1.26.0
 joblib
 pickle-mixin
 jupyter
@@ -29,5 +30,5 @@ fastapi
 uvicorn
 httpx
 wordcloud
-openai>=1.0.0
 python-dotenv
+textblob

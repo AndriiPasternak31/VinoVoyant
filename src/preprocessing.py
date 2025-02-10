@@ -6,6 +6,14 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 import re
+import boto3
+import botocore
+import io
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # Download all required NLTK data
 try:
@@ -19,13 +27,20 @@ try:
     # Verify punkt is available
     nltk.data.find('tokenizers/punkt')
 except Exception as e:
-    print(f"Warning: NLTK data download failed: {str(e)}")
+    logger.warning(f"NLTK data download failed: {str(e)}")
 
 class WineDataPreprocessor:
     def __init__(self):
         self.label_encoders = {}
         self.scaler = StandardScaler()
         self.tfidf = TfidfVectorizer(max_features=100)
+        self.s3_bucket = "vino-voyant-wine-origin-predictor"
+        self.s3_region = "eu-north-1"
+        self.last_data_source = None  # Track the last successful data source
+        
+        # Configure AWS for public access
+        boto3.setup_default_session(region_name=self.s3_region)
+        logger.info(f"Initialized WineDataPreprocessor with S3 bucket: {self.s3_bucket} in region: {self.s3_region}")
         
         # Ensure NLTK resources are available
         try:
@@ -38,8 +53,45 @@ class WineDataPreprocessor:
             nltk.download('stopwords')
     
     def load_data(self, file_path):
-        """Load the wine dataset."""
-        return pd.read_csv(file_path)
+        """Load the wine dataset from S3."""
+        logger.info("Attempting to load data from S3...")
+        
+        try:
+            # Check AWS credentials
+            session = boto3.Session()
+            credentials = session.get_credentials()
+            if credentials is None:
+                logger.warning("No AWS credentials found - attempting anonymous access")
+            else:
+                logger.info("AWS credentials found")
+            
+            # Try anonymous access for public bucket
+            s3 = boto3.client(
+                's3',
+                region_name=self.s3_region,
+                aws_access_key_id='',
+                aws_secret_access_key='',
+                config=botocore.config.Config(signature_version=botocore.UNSIGNED)
+            )
+            logger.info(f"Initialized S3 client in region: {self.s3_region} with anonymous access")
+            
+            logger.info(f"Attempting to get object from bucket: {self.s3_bucket}")
+            obj = s3.get_object(Bucket=self.s3_bucket, Key='wine_quality_1000.csv')
+            logger.info("Successfully retrieved data from S3")
+            df = pd.read_csv(io.BytesIO(obj['Body'].read()))
+            logger.info(f"Successfully loaded DataFrame from S3 with shape: {df.shape}")
+            self.last_data_source = "S3"
+            return df
+                
+        except s3.exceptions.NoSuchBucket:
+            logger.error(f"Bucket {self.s3_bucket} does not exist")
+            raise Exception(f"S3 bucket '{self.s3_bucket}' does not exist")
+        except s3.exceptions.NoSuchKey:
+            logger.error("File wine_quality_1000.csv not found in bucket")
+            raise Exception(f"File 'wine_quality_1000.csv' not found in S3 bucket '{self.s3_bucket}'")
+        except Exception as e:
+            logger.error(f"Failed to load data from S3: {str(e)}")
+            raise Exception("Failed to load data from S3. Please ensure the S3 bucket and file are accessible.")
     
     def clean_data(self, df):
         """Basic data cleaning operations."""

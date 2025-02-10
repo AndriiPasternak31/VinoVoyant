@@ -2,6 +2,12 @@
 
 An AI-powered Streamlit app that predicts a wine's country of origin based on its description!
 
+## Try It Out!
+
+Visit the live app: [VinoVoyant on Streamlit](https://vinovoyant.streamlit.app)
+
+All features, including OpenAI-powered predictions, are available in the deployed version!
+
 ## Features
 
 - Traditional ML prediction using TF-IDF and Logistic Regression
@@ -9,8 +15,19 @@ An AI-powered Streamlit app that predicts a wine's country of origin based on it
 - Expert analysis using GPT-4 prompt engineering
 - Beautiful visualization of prediction confidence
 - Detailed analysis of wine descriptions
+- Data hosted on AWS S3 for reliable access and scalability
 
-## Setup Instructions
+## Data Source
+
+The wine dataset is hosted on AWS S3 at:
+```
+vino-voyant-wine-origin-predictor.s3.eu-north-1.amazonaws.com/wine_quality_1000.csv
+```
+The application automatically fetches the latest data from S3, with a fallback to local files if needed.
+
+## Local Development Setup
+
+If you want to run the app locally or contribute to development:
 
 1. Clone the repository:
    ```bash
@@ -29,18 +46,28 @@ An AI-powered Streamlit app that predicts a wine's country of origin based on it
    pip install -r requirements.txt
    ```
 
-4. Set up environment variables:
-   - Copy `.env.example` to `.env`:
-     ```bash
-     cp .env.example .env
+4. Set up your OpenAI API key:
+   - Option 1: Enter your API key in the app's sidebar when running locally
+   - Option 2: Create a `.env` file with your API key:
      ```
-   - Edit `.env` and add your OpenAI API key
-   - Or use the in-app API key configuration in the sidebar
+     OPENAI_API_KEY=your_api_key_here
+     ```
 
 5. Run the app:
    ```bash
    streamlit run streamlit_app.py
    ```
+
+## Project Structure
+
+The app uses a modular structure:
+- `src/preprocessing.py`: Data preprocessing utilities
+- `src/models/`: Model implementations
+- `streamlit_app.py`: Main application interface
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Development
 
